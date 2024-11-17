@@ -37,6 +37,29 @@ class State(object):
 
     totalQubitsInState=staticmethod(lambda state: math.log2(state.shape[0])/math.log2(2))
 
+class ChangeBases(object):
+    #TODO test this more
+    @staticmethod
+    def changeToX(state):
+        newState=Compute.runGate(Gate.hadamard,state)
+        return newState
+    
+    @staticmethod
+    def changeToY(state):
+        newState=Compute.runGate(np.linalg.multi_dot([Gate.hadamard,np.conj(Gate.phaseS.T)]),state)
+        return newState
+    
+    @staticmethod
+    def changeToW(state):
+        newState=Compute.runGate(np.linalg.multi_dot([Gate.hadamard,Gate.phaseT,Gate.hadamard,Gate.phaseS]),state)
+        return newState
+    
+    @staticmethod
+    def changeToV(state):
+        newState=Compute.runGate(np.linalg.multi_dot([Gate.hadamard,np.conjugate(Gate.phaseT.T),Gate.hadamard,Gate.phaseS]),state)
+        return newState
+    #TODO: Make change back to Z function - ideally don't need 4
+
 
 class GateFunc(object):
     #Universal Controlled Gate Matrix
@@ -99,42 +122,43 @@ class Gate(object):
     phaseS=sp.linalg.sqrtm(phaseZ)
     phaseT=sp.linalg.sqrtm(phaseS)
     #Rotation Gates (take parameter "shift"):
-    Rx=staticmethod(lambda shift: sp.linalg.exp(-1j*pauliX*shift/2))
-    Ry=staticmethod(lambda shift: sp.linalg.exp(-1j*pauliY*shift/2))
-    Rz=staticmethod(lambda shift: sp.linalg.exp(-1j*pauliZ*shift/2))
+    Rx=staticmethod(lambda shift: sp.linalg.exp(-1j*Gate.pauliX*shift/2))
+    Ry=staticmethod(lambda shift: sp.linalg.exp(-1j*Gate.pauliY*shift/2))
+    Rz=staticmethod(lambda shift: sp.linalg.exp(-1j*Gate.pauliZ*shift/2))
 
     #TODO: Programatically create CCNOT gates and the like
     
-    #Common Controlled Gates upt to 3 qubits
+    #Common Controlled Gates upt to 5 qubits
     CNOT=dict()
-    for total in range(2,4):
-        for control in range(3):
+    for total in range(2,6):
+        for control in range(5):
             if control<total:
-                for target in range(3):
+                for target in range(5):
                     if target<total and control!=target:
                         CNOT[control,target,total]=GateFunc.createControlledGate(NOT,control,target,total)
     
     cPhaseS=dict()
-    for total in range(2,4):
-        for control in range(3):
+    for total in range(2,6):
+        for control in range(5):
             if control<total:
-                for target in range(3):
+                for target in range(5):
                     if target<total and control!=target:
                         cPhaseS[control,target,total]=GateFunc.createControlledGate(phaseS,control,target,total)
     cPhase=dict()
     @staticmethod
     def cPhase(shift):
-        for total in range(2,4):
-            for control in range(3):
+        for total in range(2,6):
+            for control in range(5):
                 if control<total:
-                    for target in range(3):
+                    for target in range(5):
                         if target<total and control!=target:
-                            cPhase[control,target,total,shift]=GateFunc.createControlledGate(Gate.gPhase(shift),control,target,total)
-        return cPhase
+                            Gate.cPhase[control,target,total,shift]=GateFunc.createControlledGate(Gate.gPhase(shift),control,target,total)
+        return Gate.cPhase
 
     #Swap gate
     #TODO: make this programatically
     SWAP=np.array([[1,0,0,0],[0,0,1,0],[0,1,0,0],[0,0,0,1]])
+
 
 
 class Compute(object):
@@ -145,6 +169,7 @@ class Compute(object):
             newState=np.dot(gate,state)
         else:
             raise ValueError('gate size does not match total qubits in state')
+        return newState
         
 
 
@@ -152,33 +177,40 @@ class Measure(object):
     @staticmethod
     def measure(state,qubit):
         #TODO: test this its kinda sketch
-        total=int(totalQubitsInState(state))
+        #TODO: this won't work for entangled qubits
+        total=int(State.totalQubitsInState(state))
         if qubit>total-1: raise ValueError('The measured qubit number cannot be greater than the number of qubits in the state')
         if qubit==0: pa0=GateFunc.P0; pa1=GateFunc.P1
         else:
             pa0=Gate.ID
             for i in range(qubit):
-                pa0=nKron(pa,Gate.ID)
-            pa1=nKron(pa0,Gate.P1)
-            pa0=nKron(pa0,Gate.P0)
+                pa0=State.nKron(pa0,Gate.ID)
+            pa1=State.nKron(pa0,Gate.P1)
+            pa0=State.nKron(pa0,Gate.P0)
         for i in range(total-qubit):
-            pa0=nKron(pa0,Gate.ID)
-            pa1=nKron(pa1,GAte.ID)
+            pa0=State.nKron(pa0,Gate.ID)
+            pa1=State.nKron(pa1,Gate.ID)
         prob0=np.trace(np.dot(pa0,np.dot(state,state.T)))
         if np.random.rand()<prob0:
             result=0
-            newState=normalizeSt(np.dot(pa0,state))
+            newState=State.normalizeState(np.dot(pa0,state))
         else:
             result=1
-            newState=normalizeSt(np.dot(pa1,state))
+            newState=State.normalizeState(np.dot(pa1,state))
         state[0:]=newState
         return result
     
 class Register(object):
     #TODO: make this - intialize qubits etc.
+    #This will be user input
+    def __init__(self,state=State.zero,entangled=None):
+        self._entangled=[self]
+        self._state=state
+        self._noop = [] # after a measurement set this so that we can allow no further operations. Set to Bloch coords if bloch operation performed
 
 class UnitTests(object):
     #TODO: make unit tests - probably one class for each test
-    
-class algorithms(object):
+    p=1
+class Algorithms(object):
     #TODO: optionally create some algorithms to run
+    p=1
